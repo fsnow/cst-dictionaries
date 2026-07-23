@@ -8,16 +8,18 @@ itself lives at [github.com/fsnow/cst](https://github.com/fsnow/cst).
 ## What's here
 
 Each dictionary is a **separate asset** with its **own provenance and license** — nothing is merged into one
-file, and a published **manifest** carries the per-dictionary metadata (id, display name, version, checksum,
-attribution, and license *where one applies*). Today:
+file, and a single published **catalog manifest** (`dictionaries.manifest.json`) lists every asset with its
+version axes, checksum, and sizes. Attribution + license *where one applies* travel in each asset's own `meta`
+table. Today:
 
 | id | asset | what it is | source | license |
 |----|-------|-----------|--------|---------|
 | `dpd` | `dpd-cst-subset.db` | a trimmed, corpus-agnostic subset of the Digital Pāḷi Dictionary — form→lemma resolution, lemma/report metadata, sandhi deconstructions | [Digital Pāḷi Dictionary](https://www.dpdict.net/) (Bhikkhu Bodhirāsa) | CC BY-NC-SA 4.0 (see `LICENSE`) |
 | `dppn` | `dppn.db` | the Dictionary of Pāli Proper Names — people, places, texts, as an entity reference | G. P. Malalasekera, rev. Ānandajoti Bhikkhu (2025), [Ancient Buddhist Texts](https://ancient-buddhist-texts.net/Textual-Studies/DPPN/index.htm) | — |
 
-More dictionaries are added the same way: a build tool, a released asset, a manifest entry — no CST Reader
-release required.
+A **new version** of a listed dictionary ships with no CST Reader release: cut a release, and the app picks it
+up. A **brand-new dictionary** additionally needs the app to learn its descriptor (install path + version
+reader + usability probe) once — after that, its versions flow the same way.
 
 ## Build tools
 
@@ -47,12 +49,31 @@ definition body to a closed HTML tag allowlist.
 dotnet run -c Release --project DppnBuilder -- <DPPN.json> <out/dppn.db> <sourceVersion>
 ```
 
+### `CatalogBuilder/` → `dictionaries.manifest.json` + `<asset>.db.gz`
+
+Packages one or more built asset `.db` files into a release: gzips each, computes its SHA-256 + sizes, reads
+its version axes, and writes the single catalog manifest CST Reader polls. The catalog id + versions are read
+from each db's own `meta` (a DPD-lemma db by `dpd_version` → id `dpd`; a lexicon by `source_id` +
+`source_version`), so it needs no per-dictionary configuration.
+
+```bash
+dotnet run -c Release --project CatalogBuilder -- <dpd-cst-subset.db> <dppn.db> --out <release-dir>
+```
+
 ## Releases
 
-Assets are built **locally** (a scheduled task on a dev machine, not GitHub CI) and attached to GitHub
-Releases as `<asset>.db.zst` + `.sha256`, alongside the manifest. A new release is cut when an upstream source
+Assets are built **locally** (a scheduled task on a dev machine, not GitHub CI). A release attaches the catalog
+manifest `dictionaries.manifest.json` **plus every `<asset>.db.gz`** it references (gzip — CST Reader
+decompresses gzip and verifies the SHA-256 of the `.gz`). A new release is cut when an upstream source
 publishes a new version **or** a build tool's converter/schema version bumps. CST Reader's update service polls
-this repo, compares the manifest, and downloads what changed.
+this repo, reads the catalog, and downloads only the dictionaries whose `(sourceVersion, converterVersion)`
+changed — each independently, preserving any existing asset until its replacement is verified. Example:
+
+```bash
+cd <release-dir>
+gh release create <tag> dictionaries.manifest.json dpd-cst-subset.db.gz dppn.db.gz \
+  --title "<title>" --notes "<notes>"
+```
 
 ## Attribution & licensing
 
