@@ -43,7 +43,9 @@ catch (Exception ex) when (ex is IOException or JsonException or InvalidOperatio
 static class Dppn
 {
     const int SchemaVersion = 1;
-    const int ConverterVersion = 1;
+    // v2: display_name is now the full title ("Dictionary of Pāli Proper Names") instead of "DPPN", for the
+    // source picker. Bumped so the new meta propagates to already-installed copies (the app compares this axis).
+    const int ConverterVersion = 2;
 
     public static int Build(string jsonPath, string dbPath, string sourceVersion)
     {
@@ -95,7 +97,7 @@ static class Dppn
         {
             ("schema_version", SchemaVersion.ToString()),
             ("source_id", "dppn"),
-            ("display_name", "DPPN"),
+            ("display_name", "Dictionary of Pāli Proper Names"),
             ("definition_language", "en"),
             ("kind", "proper-names"),
             ("title", "Dictionary of Pāli Proper Names"),
