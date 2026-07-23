@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Catalog builder. Standalone console tool (NOT part of the main solution) that packages one or more
+    built dictionary assets into a GitHub Release: gzips each .db, computes its SHA-256 + sizes, reads
+    its version stamps, and writes the single catalog manifest (dictionaries.manifest.json) that CST
+    Reader's DpdUpdateService polls. Depends only on Microsoft.Data.Sqlite — it reads each db's own
+    `meta` table to derive the catalog id + version axes, so adding a dictionary needs no code change here.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CatalogBuilder</RootNamespace>
+    <AssemblyName>CatalogBuilder</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <!-- Pin patched native SQLite (3.0.3) to clear the 2.1.11 advisory GHSA-2m69-gcr7-jv3q. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+  </ItemGroup>
+
+</Project>
