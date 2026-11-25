@@ -365,7 +365,8 @@ string? DerivedFrom(long id)
     return c.ExecuteScalar() as string;
 }
 
-Check("lemma count == 89050", lemmaCount == 89050, lemmaCount.ToString());
+// 89,050 was the count in the DPD release this tool was first validated on; DPD only grows, so it is a floor.
+Check("lemma count >= 89050", lemmaCount >= 89050, lemmaCount.ToString());
 var paj = LemmaIds("pajānāti");
 Check("back-lookup pajānāti -> [39702]", paj.Count == 1 && paj[0] == 39702, string.Join(",", paj));
 var pannaya = LemmaIds("paññāya");

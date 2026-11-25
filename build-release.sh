@@ -7,7 +7,7 @@
 # run unattended on a schedule (launchd on Egret), but safe to run by hand.
 #
 # Per-dictionary change detection (only rebuild/republish what actually moved):
-#   - dpd  : the DPD subset. Source = digitalpalidictionary/dpd-db releases/latest (dpd.db, 169 MB).
+#   - dpd  : the DPD subset. Source = digitalpalidictionary/dpd-db releases/latest (dpd.db.tar.xz, ~170 MB).
 #            EXPENSIVE, so we rebuild ONLY when that release tag differs from the installed asset's
 #            dpd_version (or the cached db is missing, or --force). Built with DpdLemmaBuilder --scope full.
 #   - dppn : Proper Names. Source = digitalpalidictionary/other-dictionaries dictionaries/dppn/dppn.tar.zst.
@@ -24,7 +24,7 @@
 #   --dry-run      build + report what WOULD be released; touch no GitHub release
 #   --delete-latest  delete the current latest release before publishing (a true from-scratch cut)
 #
-# Requires: gh (authenticated), dotnet, git, tar, zstd, bzip2, sqlite3, python3.
+# Requires: gh (authenticated), dotnet, git, tar (with xz and zstd), sqlite3, python3.
 # =============================================================================================
 set -euo pipefail
 
@@ -85,12 +85,20 @@ fi
 DPD_HAVE="$( [ -f "$DPD_DB" ] && sqlite3 "$DPD_DB" "SELECT value FROM meta WHERE key='dpd_version'" 2>/dev/null || echo )"
 
 if [ "$FORCE" -eq 1 ] || [ "$DPD_HAVE" != "$DPD_TAG" ]; then
-  log "DPD: rebuilding (have='${DPD_HAVE:-none}', latest=$DPD_TAG) — downloading dpd.db (~169 MB)…"
+  log "DPD: rebuilding (have='${DPD_HAVE:-none}', latest=$DPD_TAG) — downloading dpd.db (~170 MB)…"
   tmp="$WORK/dpd-src"; rm -rf "$tmp"; mkdir -p "$tmp"
-  gh release download "$DPD_TAG" --repo "$DPD_REPO" -p 'dpd.db.tar.bz2' -O "$tmp/dpd.db.tar.bz2"
-  tar -xjf "$tmp/dpd.db.tar.bz2" -C "$tmp"
+  # DPD ships dpd.db.tar.xz since v0.4.20260728 (dpd.db.tar.bz2 before): take whichever this release has.
+  DPD_ASSET="$(gh release view "$DPD_TAG" --repo "$DPD_REPO" --json assets \
+    --jq '[.assets[].name | select(startswith("dpd.db.tar."))] | first // ""')"
+  [ -n "$DPD_ASSET" ] || die "$DPD_REPO $DPD_TAG has no dpd.db.tar.* asset"
+  gh release download "$DPD_TAG" --repo "$DPD_REPO" -p "$DPD_ASSET" -O "$tmp/$DPD_ASSET"
+  tar -xf "$tmp/$DPD_ASSET" -C "$tmp"   # bsdtar/GNU tar detect xz or bz2 themselves
   DPD_SRC="$(find "$tmp" -name dpd.db -maxdepth 3 | head -1)"; [ -n "$DPD_SRC" ] || die "dpd.db not found in archive"
-  dotnet run -c Release --project "$REPO_DIR/DpdLemmaBuilder" -- "$DPD_SRC" "$DPD_DB" --scope full
+  # Build beside the cache and move it in only once the builder's checks pass: a failed build left in
+  # place would be taken as "unchanged" by the next run and published.
+  rm -f "$DPD_DB.new"
+  dotnet run -c Release --project "$REPO_DIR/DpdLemmaBuilder" -- "$DPD_SRC" "$DPD_DB.new" --scope full
+  mv -f "$DPD_DB.new" "$DPD_DB"
   rm -rf "$tmp"
 else
   log "DPD: unchanged ($DPD_HAVE) — reusing cached build."
